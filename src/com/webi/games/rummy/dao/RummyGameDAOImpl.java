@@ -16,11 +16,8 @@ import org.hibernate.criterion.Restrictions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.webi.ent.registration.UserRegistryEntity;
@@ -34,8 +31,13 @@ import com.webi.games.rummy.game.IRummyGame;
 import com.webi.games.rummy.game.Player;
 import com.webi.games.rummy.game.RummyGameBO;
 
-// TODO: None of these methods should own the transaction. Transaction should be started @ service level and
-// all these methods should expect the existing transaction and use it
+/**
+ * DAO implementation for working with Rummy Game Database. APIs on this class expect presence of transaction.
+ * Transactional behavior is controlled at service level.
+ * 
+ * @author Webi
+ *
+ */
 @Repository
 public class RummyGameDAOImpl implements IRummyGameDAO {
 	
@@ -70,25 +72,37 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 //		}
 		
 		final RummyGameEntity rummyGameEntity = createNewRummyEntityObject(gameName, player);
+
+//   PROGRAMMATIC TRANSACTION NOT REQUIRED. SERVICE LAYER DEFINES DECLARATIVE TRANSACTIONS
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		tx.execute(new TransactionCallbackWithoutResult() {
+//			
+//		    public void doInTransactionWithoutResult(TransactionStatus status) {
+//			    	//Create the new game entry
+//				Long gameID = (Long)sessionFactory.getCurrentSession().save(rummyGameEntity);
+//				
+//				//Create Associations to the newly created game
+//				for (Iterator<IPlayer> iterator = friendsSet.iterator(); iterator.hasNext();) 
+//				{
+//					IPlayer associatedPlayer = iterator.next();
+//					RummyGameAssociatedPlayersEntity rummyGameAssociatedPlayersEntity =
+//							new RummyGameAssociatedPlayersEntity(gameID.longValue(), associatedPlayer.getEmailId());
+//					sessionFactory.getCurrentSession().save(rummyGameAssociatedPlayersEntity);
+//				}
+//		    }
+//		});
 		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		tx.execute(new TransactionCallbackWithoutResult() {
-			
-		    public void doInTransactionWithoutResult(TransactionStatus status) {
-			    	//Create the new game entry
-				Long gameID = (Long)sessionFactory.getCurrentSession().save(rummyGameEntity);
-				
-				//Create Associations to the newly created game
-				for (Iterator<IPlayer> iterator = friendsSet.iterator(); iterator.hasNext();) 
-				{
-					IPlayer associatedPlayer = iterator.next();
-					RummyGameAssociatedPlayersEntity rummyGameAssociatedPlayersEntity =
-							new RummyGameAssociatedPlayersEntity(gameID.longValue(), associatedPlayer.getEmailId());
-					sessionFactory.getCurrentSession().save(rummyGameAssociatedPlayersEntity);
-				}
-		    }
-		});
+		Long gameID = (Long)sessionFactory.getCurrentSession().save(rummyGameEntity);
+		//Create Associations to the newly created game
+		for (Iterator<IPlayer> iterator = friendsSet.iterator(); iterator.hasNext();) 
+		{
+			IPlayer associatedPlayer = iterator.next();
+			RummyGameAssociatedPlayersEntity rummyGameAssociatedPlayersEntity =
+					new RummyGameAssociatedPlayersEntity(gameID.longValue(), associatedPlayer.getEmailId());
+			sessionFactory.getCurrentSession().save(rummyGameAssociatedPlayersEntity);
+		}
+		
 		return rummyGameEntity; 
 	}
 	
@@ -102,16 +116,17 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		final Criteria criteria = session.createCriteria(RummyGameAssociatedPlayersEntity.class);
 		criteria.add(Restrictions.eq("gameId", gameId));
 		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		
-		associatedPlayerEntityList = tx.execute(new TransactionCallback<List<RummyGameAssociatedPlayersEntity>>() {
-			@SuppressWarnings("unchecked")
-			@Override
-			public List<RummyGameAssociatedPlayersEntity> doInTransaction(TransactionStatus arg0) {
-				return criteria.list();
-			}
-		});
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		associatedPlayerEntityList = tx.execute(new TransactionCallback<List<RummyGameAssociatedPlayersEntity>>() {
+//			@SuppressWarnings("unchecked")
+//			@Override
+//			public List<RummyGameAssociatedPlayersEntity> doInTransaction(TransactionStatus arg0) {
+//				return criteria.list();
+//			}
+//		});
+		associatedPlayerEntityList = criteria.list(); 
 		return associatedPlayerEntityList;
 	}
 	
@@ -126,18 +141,26 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		
 		final Query query = session.createQuery(HQL_GET_PLAYER_NAMES_FROM_IDS).setParameterList("playerIds", playerIds);
 		
-		tx.execute(new TransactionCallbackWithoutResult() {
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus arg0) {
-				List<UserRegistryEntity> usersList = query.list();
-				for ( UserRegistryEntity entity : usersList ) {
-					Player player = new Player();
-					player.setEmailId(entity.getUserId());
-					player.setName(entity.getUserName());
-					playersWithNamesPopulated.add(player);
-				}
-			}
-		});
+//		tx.execute(new TransactionCallbackWithoutResult() {
+//			@Override
+//			protected void doInTransactionWithoutResult(TransactionStatus arg0) {
+//				List<UserRegistryEntity> usersList = query.list();
+//				for ( UserRegistryEntity entity : usersList ) {
+//					Player player = new Player();
+//					player.setEmailId(entity.getUserId());
+//					player.setName(entity.getUserName());
+//					playersWithNamesPopulated.add(player);
+//				}
+//			}
+//		});
+		List<UserRegistryEntity> usersList = query.list();
+		for ( UserRegistryEntity entity : usersList ) {
+			Player player = new Player();
+			player.setEmailId(entity.getUserId());
+			player.setName(entity.getUserName());
+			playersWithNamesPopulated.add(player);
+		}
+
 		return playersWithNamesPopulated;
 	}
 	
@@ -145,16 +168,16 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 	@Override
 	public String getMailManagerPassword(final String mailManagerUserId) {
 		final Session session = sessionFactory.getCurrentSession();
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		
-		MailManagerEntity mailManagerEntity = tx.execute(new TransactionCallback<MailManagerEntity>() {
-			@Override
-			public MailManagerEntity doInTransaction(TransactionStatus arg0) {
-				return (MailManagerEntity)session.get(MailManagerEntity.class, mailManagerUserId);
-			}
-		});
-		
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		MailManagerEntity mailManagerEntity = tx.execute(new TransactionCallback<MailManagerEntity>() {
+//			@Override
+//			public MailManagerEntity doInTransaction(TransactionStatus arg0) {
+//				return (MailManagerEntity)session.get(MailManagerEntity.class, mailManagerUserId);
+//			}
+//		});
+		MailManagerEntity mailManagerEntity = (MailManagerEntity)session.get(MailManagerEntity.class, mailManagerUserId);
 		String password = null;
 		if ( mailManagerEntity != null ) {
 			password = mailManagerEntity.getPassword();
@@ -166,17 +189,18 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 	@Override
 	public RummyGameEntity getGameById(final long gameId) {
 		final Session session = sessionFactory.getCurrentSession();
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
 		
-		RummyGameEntity gamesEntity = tx.execute(new TransactionCallback<RummyGameEntity>() {
-			@Override
-			public RummyGameEntity doInTransaction(TransactionStatus arg0) {
-				return (RummyGameEntity)session.get(RummyGameEntity.class, gameId);
-			}
-		});
-		
-		return gamesEntity;
+//		RummyGameEntity gamesEntity = tx.execute(new TransactionCallback<RummyGameEntity>() {
+//			@Override
+//			public RummyGameEntity doInTransaction(TransactionStatus arg0) {
+//				return (RummyGameEntity)session.get(RummyGameEntity.class, gameId);
+//			}
+//		});
+//		
+//		return gamesEntity;
+		return (RummyGameEntity)session.get(RummyGameEntity.class, gameId);
 	}
 
 	/* (non-Javadoc)
@@ -190,16 +214,17 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		final Query query = session.createQuery(HQL_OPEN_GAMES_FOR_PLAYER);
 		query.setString("originatorPlayerId",originatorPlayerId);
 		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		
-		List<RummyGameEntity> openGamesEntityList = tx.execute(new TransactionCallback<List<RummyGameEntity>>() {
-			@Override
-			public List<RummyGameEntity> doInTransaction(TransactionStatus arg0) {
-				return query.list();
-			}
-		});
-		return openGamesEntityList;
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		List<RummyGameEntity> openGamesEntityList = tx.execute(new TransactionCallback<List<RummyGameEntity>>() {
+//			@Override
+//			public List<RummyGameEntity> doInTransaction(TransactionStatus arg0) {
+//				return query.list();
+//			}
+//		});
+//		return openGamesEntityList;
+		return query.list();
 	}
 	
 	/* (non-Javadoc)
@@ -214,35 +239,53 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		query.setString("playerId",playerId);
 		//query.setString("gameAcceptStatus", GameAcceptStatus.NO_RESPONSE.toString());
 		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
 		
 		final List<IRummyGame> openGamesList  = new ArrayList<IRummyGame>();
-		tx.execute(new TransactionCallbackWithoutResult() {
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus arg0) {
-				
-				@SuppressWarnings("unchecked")
-				List<Object[]> associatedPlayersEntityList = query.list();
-				for (Iterator<Object[]> iterator = associatedPlayersEntityList.iterator(); iterator.hasNext();) {
-					Object [] resultPair = iterator.next();
-					RummyGameBO rummyGameBO =new RummyGameBO();
-					rummyGameBO.populateFromEntity((RummyGameEntity)resultPair[0]);
-					//Originator Player
-					Player originatorPlayer = new Player();
-					
-					UserRegistryEntity userRegistryEntity  =  ((UserRegistryEntity)resultPair[2]);
-					originatorPlayer.setEmailId(userRegistryEntity.getUserId());
-					originatorPlayer.setName(userRegistryEntity.getUserName());
-					rummyGameBO.setOriginatorPlayer(originatorPlayer);
-					
-					rummyGameBO.setAssociatedPlayerId(playerId);
-					
-					rummyGameBO.setGameAcceptanceStatus(((RummyGameAssociatedPlayersEntity)resultPair[1]).getGameAcceptStatus());
-					openGamesList.add(rummyGameBO);
-				}
-			}
-		});
+//		tx.execute(new TransactionCallbackWithoutResult() {
+//			@Override
+//			protected void doInTransactionWithoutResult(TransactionStatus arg0) {
+//				
+//				@SuppressWarnings("unchecked")
+//				List<Object[]> associatedPlayersEntityList = query.list();
+//				for (Iterator<Object[]> iterator = associatedPlayersEntityList.iterator(); iterator.hasNext();) {
+//					Object [] resultPair = iterator.next();
+//					RummyGameBO rummyGameBO =new RummyGameBO();
+//					rummyGameBO.populateFromEntity((RummyGameEntity)resultPair[0]);
+//					//Originator Player
+//					Player originatorPlayer = new Player();
+//					
+//					UserRegistryEntity userRegistryEntity  =  ((UserRegistryEntity)resultPair[2]);
+//					originatorPlayer.setEmailId(userRegistryEntity.getUserId());
+//					originatorPlayer.setName(userRegistryEntity.getUserName());
+//					rummyGameBO.setOriginatorPlayer(originatorPlayer);
+//					
+//					rummyGameBO.setAssociatedPlayerId(playerId);
+//					
+//					rummyGameBO.setGameAcceptanceStatus(((RummyGameAssociatedPlayersEntity)resultPair[1]).getGameAcceptStatus());
+//					openGamesList.add(rummyGameBO);
+//				}
+//			}
+//		});
+		List<Object[]> associatedPlayersEntityList = query.list();
+		for (Iterator<Object[]> iterator = associatedPlayersEntityList.iterator(); iterator.hasNext();) {
+			Object [] resultPair = iterator.next();
+			RummyGameBO rummyGameBO =new RummyGameBO();
+			rummyGameBO.populateFromEntity((RummyGameEntity)resultPair[0]);
+			//Originator Player
+			Player originatorPlayer = new Player();
+			
+			UserRegistryEntity userRegistryEntity  =  ((UserRegistryEntity)resultPair[2]);
+			originatorPlayer.setEmailId(userRegistryEntity.getUserId());
+			originatorPlayer.setName(userRegistryEntity.getUserName());
+			rummyGameBO.setOriginatorPlayer(originatorPlayer);
+			
+			rummyGameBO.setAssociatedPlayerId(playerId);
+			
+			rummyGameBO.setGameAcceptanceStatus(((RummyGameAssociatedPlayersEntity)resultPair[1]).getGameAcceptStatus());
+			openGamesList.add(rummyGameBO);
+		}
 		return openGamesList;
 	}
 
@@ -254,15 +297,15 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		final Query query = session.createQuery(HQL_GAMES_HISTORY_FOR_PLAYER );
 		query.setString("originatorPlayerId",originatorPlayerId);
 		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		
-		List<RummyGameEntity> openGamesEntityList = tx.execute(new TransactionCallback<List<RummyGameEntity>>() {
-			@Override
-			public List<RummyGameEntity> doInTransaction(TransactionStatus arg0) {
-				return query.list();
-			}
-		});
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		List<RummyGameEntity> openGamesEntityList = tx.execute(new TransactionCallback<List<RummyGameEntity>>() {
+//			@Override
+//			public List<RummyGameEntity> doInTransaction(TransactionStatus arg0) {
+//				return query.list();
+//			}
+//		});
 //		if ( openGamesEntityList != null && openGamesEntityList.isEmpty() == false ) {
 //			openGamesList = new ArrayList<IRummyGame>();
 //			
@@ -272,7 +315,8 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 //				openGamesList.add(new RummyGameBO().populateFromEntity(rummyGameEntity));
 //			}
 //		}
-		return openGamesEntityList;
+//		return openGamesEntityList;
+		return query.list();
 	}
 	
 	@Override
@@ -282,23 +326,26 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		final RummyGameEntity rummyGameEntity = new RummyGameEntity();
 		rummyGameEntity.setGameId(rummyGame.getGameId());
 		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		tx.execute(new TransactionCallbackWithoutResult() {
+//			@Override
+//			protected void doInTransactionWithoutResult(TransactionStatus arg0) {
+//				
+//				Session session = sessionFactory.getCurrentSession();
+//				
+//				//delete the main game entry
+//				session.delete(rummyGameEntity);
+//				
+//				//TODO: delete the associated players table
+//				
+//			}
+//		});
+		Session session = sessionFactory.getCurrentSession();
 		
-		tx.execute(new TransactionCallbackWithoutResult() {
-			@Override
-			protected void doInTransactionWithoutResult(TransactionStatus arg0) {
-				
-				Session session = sessionFactory.getCurrentSession();
-				
-				//delete the main game entry
-				session.delete(rummyGameEntity);
-				
-				//TODO: delete the associated players table
-				
-			}
-		});
-		
+		//delete the main game entry
+		session.delete(rummyGameEntity);
 		return deleteResult;
 	}
 
@@ -310,17 +357,17 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 		Session session = sessionFactory.getCurrentSession();
 		final Query query = session.createQuery(HQL_NOT_STARTED_GAME_FOR_PLAYER);
 		query.setString("originatorPlayerId",originatorPlayerId);
-		
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		
-		List<RummyGameEntity> openGames = tx.execute(new TransactionCallback<List<RummyGameEntity>>() {
-			@Override
-			public List<RummyGameEntity> doInTransaction(TransactionStatus arg0) {
-				return query.list();
-			}
-		});
-		
+//		
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		List<RummyGameEntity> openGames = tx.execute(new TransactionCallback<List<RummyGameEntity>>() {
+//			@Override
+//			public List<RummyGameEntity> doInTransaction(TransactionStatus arg0) {
+//				return query.list();
+//			}
+//		});
+		List<RummyGameEntity> openGames = query.list();
 		if ( openGames != null && openGames.isEmpty() == false ) 
 		{
 			rummyGame = openGames.get(0);
@@ -333,15 +380,16 @@ public class RummyGameDAOImpl implements IRummyGameDAO {
 	@Override
 	public RummyGameHandPositionEntity getHandPositionEntity(final long gameId) {
 		final Session session = sessionFactory.getCurrentSession();
-		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
-		TransactionTemplate tx = new TransactionTemplate(txManager);
-		
-		return tx.execute(new TransactionCallback<RummyGameHandPositionEntity>() {
-			@Override
-			public RummyGameHandPositionEntity doInTransaction(TransactionStatus arg0) {
-				return (RummyGameHandPositionEntity)session.get(RummyGameHandPositionEntity.class, gameId);
-			}
-		});
+//		DataSourceTransactionManager txManager = new DataSourceTransactionManager(datasource);
+//		TransactionTemplate tx = new TransactionTemplate(txManager);
+//		
+//		return tx.execute(new TransactionCallback<RummyGameHandPositionEntity>() {
+//			@Override
+//			public RummyGameHandPositionEntity doInTransaction(TransactionStatus arg0) {
+//				return (RummyGameHandPositionEntity)session.get(RummyGameHandPositionEntity.class, gameId);
+//			}
+//		});
+		return (RummyGameHandPositionEntity)session.get(RummyGameHandPositionEntity.class, gameId);
 	}
 	
 	
