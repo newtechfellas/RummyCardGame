@@ -6,7 +6,7 @@ import javax.persistence.Id;
 import javax.persistence.Table;
 
 @Entity
-@Table(name="MAIL_MANAGER_TBL")
+@Table(name="MAIL_CREDENTIALS_TBL")
 public class MailManagerEntity {
 
 	@Id
